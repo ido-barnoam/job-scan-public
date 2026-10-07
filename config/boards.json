@@ -1,0 +1,74 @@
+[
+ {
+  "company": "Gong.io",
+  "ats": "greenhouse",
+  "slug": "gongio",
+  "rating": 4.3
+ },
+ {
+  "company": "Moon Active",
+  "ats": "ashby",
+  "slug": "moonactive",
+  "rating": 4.2
+ },
+ {
+  "company": "JFrog",
+  "ats": "greenhouse",
+  "slug": "jfrog",
+  "rating": 4.2
+ },
+ {
+  "company": "Forter",
+  "ats": "greenhouse",
+  "slug": "forter",
+  "rating": 4.2
+ },
+ {
+  "company": "Taboola",
+  "ats": "greenhouse",
+  "slug": "taboola",
+  "rating": 4.1
+ },
+ {
+  "company": "Appsflyer",
+  "ats": "greenhouse",
+  "slug": "appsflyer",
+  "rating": 4.1
+ },
+ {
+  "company": "Cato Networks",
+  "ats": "greenhouse",
+  "slug": "catonetworks",
+  "rating": 4.1
+ },
+ {
+  "company": "WalkMe",
+  "ats": "lever",
+  "slug": "walkme",
+  "rating": 4.1
+ },
+ {
+  "company": "HoneyBook",
+  "ats": "ashby",
+  "slug": "honeybook",
+  "rating": 4.0
+ },
+ {
+  "company": "Cloudinary",
+  "ats": "lever",
+  "slug": "cloudinary",
+  "rating": 3.9
+ },
+ {
+  "company": "Riskified",
+  "ats": "greenhouse",
+  "slug": "riskified",
+  "rating": 3.8
+ },
+ {
+  "company": "Axonius",
+  "ats": "greenhouse",
+  "slug": "axonius",
+  "rating": 3.8
+ }
+]
