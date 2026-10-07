@@ -10,6 +10,20 @@ morning, uses an AI judgment service called Jev (by TypeSafe) to decide which jo
 the good ones with a link to a full report. I am not a developer, so you will do the technical work and
 guide me through anything I have to do myself.
 
+## Build from this repository: this is the most important instruction
+
+The complete, working code for this app is public at **https://github.com/ido-barnoam/job-scan-public**.
+
+1. **Copy that repository** into my folder as the starting point (clone it, or ask me to download it as a
+   ZIP if you can't reach GitHub). Then put it in a new repository under my own GitHub account.
+2. **Read its `README.md` and code before writing anything.** My app must be built from that code: the
+   same structure, files, job-board readers, Jev questions, report page, email and guardrails.
+3. **Do not rewrite it from scratch and do not swap in other libraries or services.** Only change the
+   personal settings listed under "What to change for me" below, plus anything needed to deploy it under
+   my accounts.
+4. The rest of this prompt describes what that code does, so you can check your work. **If this
+   description and the code ever disagree, the code is right.**
+
 ## About me (fill in, or leave blank and ask me)
 
 - My name:
@@ -21,19 +35,15 @@ guide me through anything I have to do myself.
 - Companies I want covered (a list, or "start from the example list"):
 - Do I want a daily email? (yes / no — the report works either way)
 
-## Start from the reference code
+## What to change for me
 
-A working version of this app is public at **https://github.com/ido-barnoam/job-scan-public**.
-Read its `README.md` and code before writing anything, and reuse it. Do not rewrite it from scratch.
-The parts that should change for me are:
+These are the only parts of the reference code that should change for me:
 
 - `config/settings.ts`: `PROFILE`, `EXCLUDED_ROLE_TYPES`, `FIT_LEVELS` (only if my seniority needs
   different wording), `WEB_SEARCHES`, and the limits in `USAGE_LIMITS` if I ask.
 - `config/companies.json`: my companies (name and Glassdoor rating; ask me for ratings or use 0).
 - `config/boards.json`: the job boards to read directly for my companies (see "Finding job boards").
 - `lib/location.ts` and the from-country question in `lib/scan.ts`, only if I'm not job hunting in Israel.
-
-If you can't reach GitHub, ask me to download the repository as a ZIP and add it to the folder.
 
 ## How you work with me
 
@@ -46,7 +56,7 @@ If you can't reach GitHub, ask me to download the repository as a ZIP and add it
 5. When something fails, read the error yourself (build log, function log) and fix it. Don't ask me
    to debug.
 
-## What the app does (match this behavior)
+## What the app does (the reference code already does all of this)
 
 Every day at 01:00 UTC a Vercel Cron job calls `/api/scan`. The scan:
 
@@ -118,7 +128,8 @@ company" check passes. Show me which companies have a board and which will rely 
 
 1. Ask me anything missing from **About me**, then write my profile, excluded role types and web
    searches, and show them to me in plain language for approval.
-2. Set up my copy of the code on GitHub and a Vercel project linked to it, with a Blob store.
+2. Copy the reference repository into a new repository on my GitHub account, apply my settings, and
+   create a Vercel project linked to it, with a Blob store.
 3. Walk me through creating the TypeSafe, Tavily and (if I want email) Resend accounts and adding the
    keys in Vercel.
 4. Deploy, then run a dry scan (`/api/scan?dry=1`, authorized with `CRON_SECRET`) and show me the report
@@ -129,6 +140,7 @@ company" check passes. Show me which companies have a board and which will rely 
 
 ## Done means
 
+- My app is a copy of the reference repository with only my personal settings changed.
 - The report link opens and shows today's run with my companies and my roles.
 - A dry run completes without errors, and the Usage tab shows Jev cost under a cent for a normal day.
 - If I wanted email: I received the first email.

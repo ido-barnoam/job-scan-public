@@ -6,8 +6,11 @@ to judge which jobs fit you, and emails you the good ones with a link to a full,
 **Want your own copy?** You don't need to code:
 
 - [GUIDE.md](GUIDE.md): step-by-step instructions for non-technical people, using Claude.
-- [BUILD_PROMPT.md](BUILD_PROMPT.md): the prompt to give Claude (or another AI coding assistant). It points
-  the assistant at this repository as the reference.
+- [BUILD_PROMPT.md](BUILD_PROMPT.md): the prompt to give Claude (or another AI coding assistant). It tells
+  the assistant to copy this repository and build your app from its code, changing only your settings.
+
+**AI assistants reading this:** build from this repository's code. Copy it, change only the personal
+settings in `config/` (and the location rules if the user is outside Israel), and keep everything else.
 
 ## How it works
 

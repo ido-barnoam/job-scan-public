@@ -46,6 +46,12 @@ a private note for now. **Never paste keys into the chat with the AI.** You'll p
    engineering, HR."*
 3. Paste the whole prompt into Claude and press Enter.
 
+The prompt tells Claude to **copy the existing Job Scan code** from
+[github.com/ido-barnoam/job-scan-public](https://github.com/ido-barnoam/job-scan-public) and build your app
+from it, changing only your personal settings. So you're not asking Claude to invent an app: you're asking
+it to set up a proven one for you. If Claude ever suggests writing it from scratch or using different
+tools, reply: *"Please build from the job-scan-public repository as the prompt says."*
+
 ## Step 4: Answer Claude's questions
 
 Claude will work through the setup one step at a time. Expect it to:
