@@ -81,7 +81,9 @@ Every day at 01:00 UTC a Vercel Cron job calls `/api/scan`. The scan:
    company is not on my list, in which case it stays one row. The company is matched to my list by code;
    Jev only chooses the company (or "none") when the data doesn't name one, and a job site's own name
    (like "Comeet") is never offered as the employer. LinkedIn "closed" readings are not trusted; those
-   jobs are kept with a "check in a browser" note.
+   jobs are kept with a "check in a browser" note. A result with no job data whose page can't be read
+   (blocked by a bot check, removed, or empty) is dropped as "Page couldn't be read" rather than judged
+   from the search snippet alone, since it may be a dead link (LinkedIn excepted).
 7. **Tiers**: strong fit = fit ≥ 2.5 and excluded-role chance under 50%; worth a look = fit ≥ 1.5 and
    excluded under 70%; everything else is dropped with a reason. Jobs emailed in the last 30 days are
    "already sent" and not emailed again.

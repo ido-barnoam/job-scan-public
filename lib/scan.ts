@@ -551,12 +551,15 @@ function tierFor(j: JobResult, reported: boolean): Pick<JobResult, "tier" | "rea
   return { tier: reported ? "seen" : tier };
 }
 
-// Web finds: a company must be chosen (not "none"), the page must not say it is closed,
+// Web finds: a company must be chosen (not "none"), the page must be readable and not say it is closed,
 // then the usual location and fit rules apply.
 function webTier(j: JobResult, reported: boolean): Pick<JobResult, "tier" | "reason"> {
   if (j.web?.closedByData) return { tier: "dropped", reason: "closed" };
   if (j.fit === undefined) return { tier: "dropped", reason: "not_judged" };
   if (j.company === "—") return { tier: "dropped", reason: "not_on_list" };
+  // A page the app couldn't read (blocked, removed, or empty without JavaScript) leaves Jev with only the
+  // search snippet, which can't say whether the job still exists. LinkedIn's page is never trusted anyway.
+  if (!j.web?.fromData && !j.web?.pageChars && !isLinkedIn(j.url)) return { tier: "dropped", reason: "unreadable" };
   // LinkedIn shows logged-out visitors a sign-in or "no longer accepting" page, so its "closed" isn't trusted.
   if ((j.web?.statusProbs?.closed ?? 0) >= 0.6 && !isLinkedIn(j.url)) return { tier: "dropped", reason: "closed" };
   return tierFor(j, reported);

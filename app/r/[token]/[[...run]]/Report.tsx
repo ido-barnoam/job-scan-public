@@ -18,6 +18,7 @@ const REASON_LABEL: Record<string, string> = {
   not_judged: "Not judged (Jev error or budget)",
   not_on_list: "Company not on your list",
   closed: "Posting closed",
+  unreadable: "Page couldn't be read",
 };
 const ROLE_LABEL: Record<RoleStatus, string> = { new: "New", cv_sent: "CV sent", not_relevant: "Not relevant" };
 type Row = JobResult & { roleStatus: RoleStatus };
@@ -332,6 +333,8 @@ function verdict(j: JobResult, t: Record<string, number>): string {
       return j.web?.closedByData
         ? "Dropped: the link is to a job that is no longer in the company's live job list."
         : `Dropped: the job's page says it is closed (${pctText(j.web?.statusProbs?.closed)}).`;
+    case "unreadable":
+      return "Dropped: the app couldn't read the job's page (it was blocked, removed, or empty), so only the search snippet was available and there's no way to tell whether the job still exists.";
   }
   return "";
 }

@@ -25,7 +25,7 @@ export type LocationClass = "israel" | "ambiguous" | "elsewhere";
 
 export type Tier = "strong" | "look" | "seen" | "dropped";
 
-export type DropReason = "low_fit" | "excluded" | "not_israel" | "wrong_company" | "not_judged" | "not_on_list" | "closed";
+export type DropReason = "low_fit" | "excluded" | "not_israel" | "wrong_company" | "not_judged" | "not_on_list" | "closed" | "unreadable";
 
 // One set of Jev answers about a job (title pass or full-posting pass).
 export interface Judgment {
