@@ -34,13 +34,18 @@ The complete, working code for this app is public at **https://github.com/ido-ba
 - Role types I never want (for example: engineering, HR, finance, entry-level):
 - Companies I want covered (a list, or "start from the example list"):
 - Do I want a daily email? (yes / no — the report works either way)
+- Do I want the LinkedIn scan, which covers any company, not just my list? (yes / no). If yes, my saved
+  LinkedIn searches: keywords, location, and optionally a radius in km or remote-only
 
 ## What to change for me
 
 These are the only parts of the reference code that should change for me:
 
 - `config/settings.ts`: `PROFILE`, `EXCLUDED_ROLE_TYPES`, `FIT_LEVELS` (only if my seniority needs
-  different wording), `WEB_SEARCHES`, and the limits in `USAGE_LIMITS` if I ask.
+  different wording), `WEB_SEARCHES`, `LINKEDIN_SEARCHES` (my saved LinkedIn searches; keep the example
+  ones only if I have none), `AGENCIES` (add recruiters I name), and the limits in `USAGE_LIMITS` if I ask.
+- `vercel.json`: remove the `/api/linkedin` cron only if I don't want the LinkedIn scan (without
+  `APIFY_TOKEN` it does nothing anyway).
 - `config/companies.json`: my companies (name and Glassdoor rating; ask me for ratings or use 0).
 - `config/boards.json`: the job boards to read directly for my companies (see "Finding job boards").
 - `lib/location.ts` and the from-country question in `lib/scan.ts`, only if I'm not job hunting in Israel.
@@ -92,6 +97,20 @@ Every day at 01:00 UTC a Vercel Cron job calls `/api/scan`. The scan:
 
 Earlier answers are reused for unchanged jobs, so a normal day costs a fraction of a cent.
 
+**The LinkedIn scan (optional)**: every day at 03:00 UTC a second cron job calls `/api/linkedin`. It runs
+each saved search in `LINKEDIN_SEARCHES` through the Apify actor `valig/linkedin-jobs-scraper` (sync API
+`run-sync-get-dataset-items`; LinkedIn's own filters passed as `urlParam` key/value pairs: `distance` in
+miles, `f_WT=2` for remote). Loose keywords, no title filter: LinkedIn matches loosely and Jev does the
+judging. At most 4 searches run at once (the free plan allows 5 concurrent runs), within a 210-second
+budget. Results are merged by posting id; postings handled in the last 30 days go to the actor as
+`skipJobId`; it looks back one day (`r86400`), or a week (`r604800`) when there was no LinkedIn run in the
+last 30 hours. Recruitment agencies (`AGENCIES`, `AGENCY_WORDS`) are dropped before Jev. Every other job is
+judged once with its full posting (LinkedIn's data includes it), with the same questions, cut-offs and
+tiers as the board scan; any company counts, and companies on my list show their rating. It has its own
+email ("LinkedIn, any company") and report run, shares the Jev budget, role statuses and the 30-day
+"already sent" list (matched by job key and by company + title, so a job is never emailed by both
+scans), and is guarded at 90% of Apify's $5 free monthly credit. Without `APIFY_TOKEN` it does nothing.
+
 **The report** (`/r/{REPORT_TOKEN}`) has tabs for Considered, Dropped, Companies checked and Usage; per
 position: company, ATS, location, fit, confidence, excluded-role chance, a Role status dropdown
 (New / CV sent / Not relevant, saved per job across runs) and a "Why?" link that opens how Jev decided
@@ -112,11 +131,13 @@ passes 90%; the email is skipped near Resend's free limits; web searches are ski
 | TypeSafe (Jev) | The fit, location and company judgments | Pay as you go, cents a month |
 | Tavily | Web search | Free plan, 1,000 searches a month |
 | Resend | The daily email (optional) | Free plan |
+| Apify | The LinkedIn scan (optional) | Free plan, $5 credit a month; a few cents a day |
 
 Environment variables in Vercel (Production, Sensitive): `TYPESAFE_API_KEY`, `TAVILY_API_KEY`,
 `RESEND_API_KEY`, `RECIPIENT_EMAIL`, `CRON_SECRET` and `REPORT_TOKEN` (generate the last two as long
 random strings and tell me how to copy them; `REPORT_TOKEN` is the secret part of my report link).
 `BLOB_READ_WRITE_TOKEN` is added automatically when you connect a Blob store to the project.
+If I want the LinkedIn scan: `APIFY_TOKEN` too (Apify console → Settings → API & Integrations).
 With Resend's free test sender (`onboarding@resend.dev`), `RECIPIENT_EMAIL` must be the address I
 signed up to Resend with.
 
@@ -132,13 +153,15 @@ company" check passes. Show me which companies have a board and which will rely 
    searches, and show them to me in plain language for approval.
 2. Copy the reference repository into a new repository on my GitHub account, apply my settings, and
    create a Vercel project linked to it, with a Blob store.
-3. Walk me through creating the TypeSafe, Tavily and (if I want email) Resend accounts and adding the
-   keys in Vercel.
+3. Walk me through creating the TypeSafe, Tavily, (if I want email) Resend and (if I want the LinkedIn
+   scan) Apify accounts and adding the keys in Vercel.
 4. Deploy, then run a dry scan (`/api/scan?dry=1`, authorized with `CRON_SECRET`) and show me the report
    link and a short summary of what it found.
-5. Once I'm happy, run one real scan so I get the first email, and confirm the daily schedule is on.
-6. Finish with a short note telling me how to change my profile or companies later (by asking you), and
-   where to find the report.
+5. If I want the LinkedIn scan: run a dry LinkedIn scan (`/api/linkedin?dry=1&week=1`) and show me what it
+   found, with its cost.
+6. Once I'm happy, run one real scan so I get the first email, and confirm the daily schedule is on.
+7. Finish with a short note telling me how to change my profile, companies or LinkedIn searches later (by
+   asking you), and where to find the report.
 
 ## Done means
 
@@ -146,4 +169,5 @@ company" check passes. Show me which companies have a board and which will rely 
 - The report link opens and shows today's run with my companies and my roles.
 - A dry run completes without errors, and the Usage tab shows Jev cost under a cent for a normal day.
 - If I wanted email: I received the first email.
+- If I wanted the LinkedIn scan: a dry LinkedIn run completes, every search ran, and its cost is shown.
 - The daily schedule is on, and nothing in the code or the repository contains my keys.

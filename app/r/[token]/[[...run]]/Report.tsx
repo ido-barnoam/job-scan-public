@@ -19,12 +19,13 @@ const REASON_LABEL: Record<string, string> = {
   not_on_list: "Company not on your list",
   closed: "Posting closed",
   unreadable: "Page couldn't be read",
+  agency: "Recruitment agency",
 };
 const ROLE_LABEL: Record<RoleStatus, string> = { new: "New", cv_sent: "CV sent", not_relevant: "Not relevant" };
 type Row = JobResult & { roleStatus: RoleStatus };
 
 const SOURCE_LABEL: Record<string, string> = { comeet: "Comeet", greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", smartrecruiters: "SmartRecruiters" };
-const ATS_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", smartrecruiters: "SmartRecruiters", web: "Web search" };
+const ATS_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", smartrecruiters: "SmartRecruiters", web: "Web search", linkedin: "LinkedIn" };
 // Where a role came from: the company's job board system, or for web-search finds, the site it was found on.
 function origin(j: JobResult): { label: string; site?: string } {
   if (j.ats !== "web") return { label: ATS_LABEL[j.ats] ?? j.ats };
@@ -47,10 +48,12 @@ function Bar({ value, max = 1, label }: { value?: number; max?: number; label?: 
   );
 }
 
-// Run ids are UTC timestamps with dashes (2026-09-23T01-00-05Z); show them in Israel time.
+// Run ids are UTC timestamps with dashes (2026-09-23T01-00-05Z, "-linkedin" added for LinkedIn runs); show them in Israel time.
 const runLabel = (id: string) => {
-  const d = new Date(id.replace(/T(\d\d)-(\d\d)-(\d\d)Z$/, "T$1:$2:$3Z"));
-  return isNaN(+d) ? id : d.toLocaleString("en-GB", { timeZone: "Asia/Jerusalem", dateStyle: "medium", timeStyle: "short" });
+  const linkedin = id.endsWith("-linkedin");
+  const d = new Date(id.replace(/-linkedin$/, "").replace(/T(\d\d)-(\d\d)-(\d\d)Z$/, "T$1:$2:$3Z"));
+  const when = isNaN(+d) ? id : d.toLocaleString("en-GB", { timeZone: "Asia/Jerusalem", dateStyle: "medium", timeStyle: "short" });
+  return `${linkedin ? "LinkedIn" : "Boards"} · ${when}`;
 };
 
 function useSort<T>(rows: T[], initial: keyof T, desc = true) {
@@ -127,13 +130,14 @@ export default function Report({ report, runs, base, token, initialStatuses }: {
   const switchTab = (t: Tab) => { setTab(t); setGroup(""); };
   const reset = () => { setQ(""); setCompany(""); setAts(""); setGroup(""); setMinConf(0); setMinFit(0); setRoleFilter(""); };
   const s = report.stats;
+  const linkedin = report.kind === "linkedin";
   const when = new Date(report.startedAt).toLocaleString("en-GB", { timeZone: "Asia/Jerusalem", dateStyle: "medium", timeStyle: "short" });
 
   return (
     <main className="wrap">
       <header className="top">
         <div>
-          <h1>Job scan</h1>
+          <h1>{linkedin ? "LinkedIn scan" : "Job scan"}</h1>
           <p className="muted">
             {when} Israel time{report.dryRun ? " · test run, not emailed" : ""} · {report.env}
           </p>
@@ -151,7 +155,7 @@ export default function Report({ report, runs, base, token, initialStatuses }: {
         <div className="tile"><b>{s.look}</b><span>Worth a look</span></div>
         <div className="tile"><b>{s.seen}</b><span>Already sent</span></div>
         <div className="tile"><b>{s.dropped}</b><span>Dropped</span></div>
-        <div className="tile"><b>{s.boardsCovered}/{s.boards}</b><span>Boards covered</span></div>
+        <div className="tile"><b>{s.boardsCovered}/{s.boards}</b><span>{linkedin ? "Searches run" : "Boards covered"}</span></div>
         <div className="tile"><b>{s.judged}</b><span>Jobs judged by Jev</span></div>
       </section>
 
@@ -171,7 +175,7 @@ export default function Report({ report, runs, base, token, initialStatuses }: {
       )}
 
       <nav className="tabs" role="tablist">
-        {([["considered", `Considered (${considered.length})`], ["dropped", `Dropped (${dropped.length})`], ["companies", `Companies checked (${report.boards.length})`], ["usage", "Usage"]] as [Tab, string][]).map(([t, l]) => (
+        {([["considered", `Considered (${considered.length})`], ["dropped", `Dropped (${dropped.length})`], ["companies", `${linkedin ? "Searches" : "Companies checked"} (${report.boards.length})`], ["usage", "Usage"]] as [Tab, string][]).map(([t, l]) => (
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => switchTab(t)}>{l}</button>
         ))}
       </nav>
@@ -186,7 +190,7 @@ export default function Report({ report, runs, base, token, initialStatuses }: {
         </label>
         <label className="field"><span>ATS</span>
           <select value={ats} onChange={(e) => setAts(e.target.value)}>
-            <option value="">All</option>{["greenhouse", "lever", "ashby", "smartrecruiters", "web"].map((a) => <option key={a}>{a}</option>)}
+            <option value="">All</option>{["greenhouse", "lever", "ashby", "smartrecruiters", "web", "linkedin"].map((a) => <option key={a}>{a}</option>)}
           </select>
         </label>
         <label className="field"><span>{tab === "considered" ? "Tier" : tab === "dropped" ? "Reason" : "Status"}</span>
@@ -212,7 +216,7 @@ export default function Report({ report, runs, base, token, initialStatuses }: {
         <button className="link" onClick={reset}>Reset</button>
       </section>
 
-      {tab === "companies" ? <Boards rows={report.boards.filter(boardFilter)} /> : <Jobs rows={(tab === "considered" ? considered : dropped).map(withStatus).filter(jobFilter)} dropped={tab === "dropped"} report={report} onStatus={changeStatus} />}
+      {tab === "companies" ? <Boards rows={report.boards.filter(boardFilter)} linkedin={linkedin} /> : <Jobs rows={(tab === "considered" ? considered : dropped).map(withStatus).filter(jobFilter)} dropped={tab === "dropped"} report={report} onStatus={changeStatus} />}
       {saveError && <p className="save-error" role="alert">{saveError}</p>}
       </>}
 
@@ -253,6 +257,7 @@ function Jobs({ rows, dropped, report, onStatus }: { rows: Row[]; dropped: boole
                   <a href={j.url} target="_blank" rel="noreferrer">{j.title}</a>
                   {j.team && <div className="muted small">{j.team}</div>}
                   {j.source === "web" && <div className="muted small">Found by web search</div>}
+                  {j.source === "linkedin" && <div className="muted small">LinkedIn search: {j.linkedin?.searches.join(", ")}</div>}
                   {j.source === "web" && j.tier !== "dropped" && isLinkedIn(j.url) && <div className="check small">LinkedIn: check in a browser that it&apos;s still open</div>}
                 </td>
                 <td>{j.company}</td>
@@ -333,6 +338,8 @@ function verdict(j: JobResult, t: Record<string, number>): string {
       return j.web?.closedByData
         ? "Dropped: the link is to a job that is no longer in the company's live job list."
         : `Dropped: the job's page says it is closed (${pctText(j.web?.statusProbs?.closed)}).`;
+    case "agency":
+      return `Dropped: ${j.company} looks like a recruitment agency or job aggregator (it is on the agency list in settings), so Jev wasn't asked.`;
     case "unreadable":
       return "Dropped: the app couldn't read the job's page (it was blocked, removed, or empty), so only the search snippet was available and there's no way to tell whether the job still exists.";
   }
@@ -382,7 +389,16 @@ function Explain({ j, report }: { j: JobResult; report: RunReport }) {
       <ol className="steps">
         <li className="step">
           <b>Source</b>
-          {j.source === "web" ? (
+          {j.source === "linkedin" ? (
+            <div>
+              Found by the LinkedIn search{(j.linkedin?.searches.length ?? 0) > 1 ? "es" : ""} <i>{j.linkedin?.searches.join(", ")}</i> (Apify).
+              Title, company, location and the full posting were read from LinkedIn&apos;s data.
+              {j.linkedin?.postedDate && <> Posted {j.linkedin.postedDate.slice(0, 10)}.</>}
+              {j.linkedin?.experienceLevel && <> LinkedIn level: {j.linkedin.experienceLevel}.</>}
+              {j.linkedin?.applicants && <> {j.linkedin.applicants}.</>}
+              {j.rating ? <> {j.company} is on your company list.</> : <> {j.company} is not on your company list, which this scan doesn&apos;t require.</>}
+            </div>
+          ) : j.source === "web" ? (
             <div>
               Found by a web search (Tavily){j.web?.query ? <> for <i>{j.web.query}</i></> : null}.
               {j.web?.snippet && <div className="muted small">Search snippet: {j.web.snippet}</div>}
@@ -481,7 +497,7 @@ function Explain({ j, report }: { j: JobResult; report: RunReport }) {
   );
 }
 
-function Boards({ rows }: { rows: BoardResult[] }) {
+function Boards({ rows, linkedin }: { rows: BoardResult[]; linkedin?: boolean }) {
   const { sorted, th } = useSort(rows, "rating");
   if (!rows.length) return <p className="empty">No companies match these filters.</p>;
   return (
@@ -489,7 +505,7 @@ function Boards({ rows }: { rows: BoardResult[] }) {
       <table>
         <thead>
           <tr>
-            {th("company", "Company")}
+            {th("company", linkedin ? "Search" : "Company")}
             {th("rating", "Glassdoor")}
             {th("ats", "ATS", "hide-sm")}
             <th>Status</th>
@@ -539,6 +555,8 @@ function UsageView({ report }: { report: RunReport }) {
     ["Vercel", "Blob data transfer (GB)", run.vercel.blobBytesRead / 1e9, month.vercel.blobBytesRead / 1e9, V.blobTransferGb, (n) => fmt(n, 3)],
     ["Resend", "Emails", run.resend.emails, month.resend.emails, L.resend.emailsPerMonth, (n) => fmt(n)],
     ["Tavily", "Web searches", run.tavily?.searches ?? 0, month.tavily?.searches ?? 0, L.tavily.searchesPerMonth, (n) => fmt(n)],
+    ["Apify", "LinkedIn cost, estimated (USD)", run.apify?.usd ?? 0, month.apify?.usd ?? 0, L.apify.monthlyCreditUsd, (n) => `$${fmt(n, 3)}`],
+    ["Apify", "LinkedIn results", run.apify?.results ?? 0, month.apify?.results ?? 0, NaN, (n) => fmt(n)],
   ];
   return (
     <>
@@ -546,7 +564,7 @@ function UsageView({ report }: { report: RunReport }) {
         <div className="tile"><b>${fmt(run.jev.usd, 4)}</b><span>Jev, this run</span></div>
         <div className="tile"><b>${fmt(month.jev.usd, 3)}</b><span>Jev, this month</span></div>
         <div className="tile"><b>${fmt(Math.max(0, L.jev.monthlyBudgetUsd - month.jev.usd), 2)}</b><span>Left of ${L.jev.monthlyBudgetUsd} Jev budget</span></div>
-        <div className="tile"><b>$0</b><span>Vercel, Resend, Tavily (free plans)</span></div>
+        <div className="tile"><b>$0</b><span>Vercel, Resend, Tavily, Apify (free plans)</span></div>
       </section>
       <div className="table-wrap">
         <table>
@@ -572,7 +590,8 @@ function UsageView({ report }: { report: RunReport }) {
         Guardrails: Jev stops at ${L.jev.monthlyBudgetUsd}/month and ${L.jev.perRunCapUsd}/run. Vercel is on the free Hobby plan, which cannot bill;
         the scan is skipped if any Hobby quota passes {Math.round(L.stopAtShare * 100)}%. Resend is on the free plan ({fmt(L.resend.emailsPerMonth)}/month,
         {" "}{L.resend.emailsPerDay}/day); the email is skipped near those limits. Tavily is on the free plan ({fmt(L.tavily.searchesPerMonth)} searches/month,
-        no card); the web searches are skipped near that limit. Months are calendar months in UTC. Vercel figures are measured by the
+        no card); the web searches are skipped near that limit. Apify is on the free plan (${L.apify.monthlyCreditUsd} credit/month); the LinkedIn scan is skipped near it, and its
+        cost is estimated from the actor&apos;s published prices. Months are calendar months in UTC. Vercel figures are measured by the
         scan itself; opening this report also uses a few Blob operations that are not counted here. Vercel&apos;s own dashboard is the source of truth.
       </p>
     </>

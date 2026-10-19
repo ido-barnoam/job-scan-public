@@ -10,6 +10,7 @@ import { blobUsage, listRuns, loadRun, type RunEntry } from "./store";
 import { runWebSearches, tavilyUsage, type WebFind } from "./web";
 import { resolveFind, type ResolvedFind } from "./webdata";
 import { isLinkedIn } from "./links";
+import { apifyUsage } from "./linkedin";
 import { addUsage, emptyUsage, monthOf, usageOfRun, vercelOverLimit } from "./usage";
 import type { Board, BoardResult, JobResult, LocationClass, RawJob, RunReport, Usage } from "./types";
 
@@ -17,7 +18,7 @@ const BOARDS = boardsJson as Board[];
 const REPORTED = reportedJson as { company: string; title: string; url: string }[];
 const COMPANIES = companiesJson as { name: string; rating: number }[];
 
-const JOB_QUESTIONS: Record<string, Question> = {
+export const JOB_QUESTIONS: Record<string, Question> = {
   fit: {
     type: "score",
     instructions: "How well does the job in `job` fit the career target described in `candidate`? Judge by the job's function and seniority.",
@@ -28,7 +29,7 @@ const JOB_QUESTIONS: Record<string, Question> = {
     instructions: `Is the job in \`job\` ${EXCLUDED_ROLE_TYPES}?`,
   },
 };
-const REMOTE_QUESTION: Question = {
+export const REMOTE_QUESTION: Question = {
   type: "noul",
   instructions: "Based on its location (and description, if given), can the job in `job` be done by someone living and working in Israel?",
   criteria: {
@@ -43,9 +44,9 @@ const BOARD_QUESTION: Question = {
 };
 
 // Second pass: the shortlist is re-judged with the full posting text.
-const DESCRIPTION_NOTE =
+export const DESCRIPTION_NOTE =
   "`job.description` is the full posting text. Judge the actual responsibilities described there, not only the title.";
-const withDescription = (q: Question): Question => ({ ...q, instructions: { question: q.instructions, note: DESCRIPTION_NOTE } });
+export const withDescription = (q: Question): Question => ({ ...q, instructions: { question: q.instructions, note: DESCRIPTION_NOTE } });
 const VERIFY_MIN_FIT = 1.2; // Israel jobs just under the "worth a look" line also get a second look
 
 // Web-search finds (Tavily): which listed company posted it, and is it still open.
@@ -70,7 +71,7 @@ export const PROFILE_VERSION = createHash("sha1")
   .digest("hex")
   .slice(0, 8);
 
-const israelDate = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(d);
+export const israelDate = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(d);
 
 interface Options {
   dryRun: boolean;
@@ -86,23 +87,25 @@ export interface ScanResult {
   emailsToday: number; // emails already sent today (UTC), for the Resend daily quota
 }
 
-export async function runScan(opts: Options): Promise<ScanResult> {
-  const started = new Date();
-  const cpuStart = process.cpuUsage();
+// History, usage so far and guardrails: shared by the board scan and the LinkedIn scan.
+// Both kinds of run live side by side, so the Jev budget, quotas and 30-day dedup are shared.
+export async function prepareRun(started: Date) {
   const errors: string[] = [];
   const warnings: string[] = [];
   usage.calls = usage.errors = usage.input = usage.output = 0;
   tavilyUsage.searches = 0;
+  apifyUsage.runs = apifyUsage.results = apifyUsage.usd = 0;
   blobUsage.advanced = blobUsage.simple = blobUsage.bytesRead = blobUsage.bytesWritten = 0;
 
-  // History: what was already reported, yesterday's judgments to reuse, and this month's usage.
+  // What was already reported, earlier judgments to reuse, and this month's usage.
   let history: RunReport[] = [];
   let storedBytes = 0;
   const month = monthOf(started.toISOString());
+  const cutoff = started.getTime() - DEDUP_DAYS * 86400_000;
   try {
     const all: RunEntry[] = await listRuns();
     storedBytes = all.reduce((n, e) => n + e.size, 0);
-    const entries = all.filter((e, i) => i < 40 || monthOf(e.uploadedAt.toISOString()) === month);
+    const entries = all.filter((e) => e.uploadedAt.getTime() >= cutoff || monthOf(e.uploadedAt.toISOString()) === month);
     history = (await pool(entries, 8, (e) => loadRun(e).catch(() => null))).filter(Boolean) as RunReport[];
   } catch (e) {
     errors.push(`Could not read run history: ${String(e)}`);
@@ -115,47 +118,67 @@ export async function runScan(opts: Options): Promise<ScanResult> {
   // Guardrails, checked before any work.
   const J = USAGE_LIMITS.jev;
   const jevLeft = J.monthlyBudgetUsd - monthPrior.jev.usd;
-  setBudget(J.usdPerMillionInputTokens, Math.max(0, Math.min(J.perRunCapUsd, opts.runCapUsd ?? Infinity, jevLeft)));
   let stopped = vercelOverLimit(monthPrior, storedBytes);
   if (!stopped && jevLeft <= 0) stopped = `Jev monthly budget of $${J.monthlyBudgetUsd} is used up ($${monthPrior.jev.usd.toFixed(2)} spent)`;
   if (!stopped && jevLeft < J.monthlyBudgetUsd * 0.2) warnings.push(`Only $${jevLeft.toFixed(2)} of the $${J.monthlyBudgetUsd} Jev budget is left this month`);
-  if (stopped) {
-    return {
-      report: {
-        id: started.toISOString().replace(/:/g, "-").replace(/\.\d+Z$/, "Z"),
-        date: israelDate(started),
-        startedAt: started.toISOString(),
-        finishedAt: new Date().toISOString(),
-        env: process.env.VERCEL_ENV ?? "local",
-        dryRun: opts.dryRun,
-        profileVersion: PROFILE_VERSION,
-        thresholds: { ...THRESHOLDS },
-        boards: [],
-        jobs: [],
-        stats: { boards: 0, boardsCovered: 0, jobsRead: 0, judged: 0, verified: 0, cachedJudgments: 0, strong: 0, look: 0, seen: 0, dropped: 0, jevCalls: 0, jevErrors: 0, inputTokens: 0, outputTokens: 0 },
-        errors,
-        blobStoredBytes: storedBytes,
-        guard: { stopped: `Scan skipped: ${stopped}`, warnings },
-      },
-      cpuStart,
-      monthPrior,
-      emailsToday,
-    };
-  }
-  let budgetHits = 0;
-  const cutoff = started.getTime() - DEDUP_DAYS * 86400_000;
+
+  // Jobs emailed in the last 30 days, by key and by company + title (the same job can reach
+  // both scans under different keys, e.g. from a company's board and from LinkedIn).
   const seen = new Set<string>();
   for (const r of history) {
-    if (r.dryRun || new Date(r.startedAt).getTime() < cutoff) continue;
-    for (const j of r.jobs) if ((j.tier === "strong" || j.tier === "look") && r.emailed?.id) seen.add(j.key);
+    if (r.dryRun || !r.emailed?.id || new Date(r.startedAt).getTime() < cutoff) continue;
+    for (const j of r.jobs)
+      if (j.tier === "strong" || j.tier === "look") {
+        seen.add(j.key);
+        seen.add(titleKey(j.company, j.title));
+      }
   }
+  return { errors, warnings, history, storedBytes, monthPrior, emailsToday, jevLeft, stopped, seen };
+}
+
+// Letters in any script, so Hebrew company names don't all collapse to "".
+const squashAny = (s: string) => s.toLowerCase().replace(STOP, "").replace(/[^\p{L}\p{N}]/gu, "");
+export const titleKey = (company: string, title: string) => `title:${squashAny(company)}|${title.toLowerCase().replace(/\s+/g, " ").trim()}`;
+
+// The report saved when a guardrail stops a run before any work.
+export function skippedReport(started: Date, dryRun: boolean, kind: RunReport["kind"], errors: string[], storedBytes: number, stopped: string, warnings: string[]): RunReport {
+  return {
+    id: runId(started, kind),
+    kind,
+    date: israelDate(started),
+    startedAt: started.toISOString(),
+    finishedAt: new Date().toISOString(),
+    env: process.env.VERCEL_ENV ?? "local",
+    dryRun,
+    profileVersion: PROFILE_VERSION,
+    thresholds: { ...THRESHOLDS },
+    boards: [],
+    jobs: [],
+    stats: { boards: 0, boardsCovered: 0, jobsRead: 0, judged: 0, verified: 0, cachedJudgments: 0, strong: 0, look: 0, seen: 0, dropped: 0, jevCalls: 0, jevErrors: 0, inputTokens: 0, outputTokens: 0 },
+    errors,
+    blobStoredBytes: storedBytes,
+    guard: { stopped: `Scan skipped: ${stopped}`, warnings },
+  };
+}
+
+export const runId = (started: Date, kind: RunReport["kind"]) =>
+  started.toISOString().replace(/:/g, "-").replace(/\.\d+Z$/, "Z") + (kind === "linkedin" ? "-linkedin" : "");
+
+export async function runScan(opts: Options): Promise<ScanResult> {
+  const started = new Date();
+  const cpuStart = process.cpuUsage();
+  const { errors, warnings, history, storedBytes, monthPrior, emailsToday, jevLeft, stopped, seen } = await prepareRun(started);
+  setBudget(USAGE_LIMITS.jev.usdPerMillionInputTokens, Math.max(0, Math.min(USAGE_LIMITS.jev.perRunCapUsd, opts.runCapUsd ?? Infinity, jevLeft)));
+  if (stopped) return { report: skippedReport(started, opts.dryRun, "boards", errors, storedBytes, stopped, warnings), cpuStart, monthPrior, emailsToday };
+
+  let budgetHits = 0;
   const cache = new Map<string, JobResult>();
   for (const r of [...history].reverse()) {
     if (opts.fresh || r.profileVersion !== PROFILE_VERSION) continue;
     for (const j of r.jobs) if (j.fit !== undefined) cache.set(`${j.key}|${j.web?.pageTitle ?? j.title}|${j.location}`, j);
   }
-  const alreadyReported = (j: RawJob) =>
-    seen.has(j.key) || REPORTED.some((r) => r.url.includes(j.id) && j.id.length >= 6);
+  const alreadyReported = (j: RawJob, company: string) =>
+    seen.has(j.key) || seen.has(titleKey(company, j.title)) || REPORTED.some((r) => r.url.includes(j.id) && j.id.length >= 6);
 
   // 1. Read the boards.
   const boards = BOARDS.slice(0, opts.boardLimit ?? BOARDS.length);
@@ -265,7 +288,7 @@ export async function runScan(opts: Options): Promise<ScanResult> {
         else errors.push(`Judgment failed for ${b.company} / ${j.title}: ${String(e).slice(0, 200)}`);
       }
     }
-    return { ...base, ...tierFor(base, alreadyReported(j)) };
+    return { ...base, ...tierFor(base, alreadyReported(j, b.company)) };
   });
 
   // 4. Second pass on the shortlist: re-judge with the full posting text.
@@ -301,7 +324,7 @@ export async function runScan(opts: Options): Promise<ScanResult> {
       r.postingPass = { fit: r.fit, fitConfidence: r.fitConfidence, fitProbs: r.fitProbs, excluded: r.excluded, remoteOk: r.remoteOk, chars: description.length };
       r.verified = true;
       r.reason = undefined;
-      Object.assign(r, tierFor(r, alreadyReported(j)));
+      Object.assign(r, tierFor(r, alreadyReported(j, b.company)));
     } catch (e) {
       if (e instanceof BudgetExceeded) budgetHits++;
       else errors.push(`Description check failed for ${b.company} / ${j.title}: ${String(e).slice(0, 200)}`);
@@ -489,7 +512,8 @@ export async function runScan(opts: Options): Promise<ScanResult> {
 
   const count = (t: JobResult["tier"]) => results.filter((r) => r.tier === t).length;
   const report: RunReport = {
-    id: started.toISOString().replace(/:/g, "-").replace(/\.\d+Z$/, "Z"),
+    id: runId(started, "boards"),
+    kind: "boards",
     date: israelDate(started),
     startedAt: started.toISOString(),
     finishedAt: new Date().toISOString(),
@@ -537,7 +561,7 @@ export async function runScan(opts: Options): Promise<ScanResult> {
   return { report, cpuStart, monthPrior, emailsToday };
 }
 
-function tierFor(j: JobResult, reported: boolean): Pick<JobResult, "tier" | "reason"> {
+export function tierFor(j: JobResult, reported: boolean): Pick<JobResult, "tier" | "reason"> {
   const t = THRESHOLDS;
   if (j.locationClass === "elsewhere") return { tier: "dropped", reason: "not_israel" };
   if (j.locationClass === "ambiguous" && j.remoteOk !== undefined && j.remoteOk < t.remoteOk)
@@ -605,7 +629,7 @@ function titleCandidates(f: WebFind, page: string): string[] {
 }
 
 // A company named by the job's own data (or its board slug), matched to your list by code.
-function matchCompany(name?: string, slug?: string) {
+export function matchCompany(name?: string, slug?: string) {
   const keys = [name, slug].filter((k): k is string => !!k).map(squash).filter((k) => k.length >= 3);
   const list = COMPANIES.map((c) => ({ ...c, key: squash(c.name) }));
   for (const k of keys) {

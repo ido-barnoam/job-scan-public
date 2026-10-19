@@ -56,7 +56,13 @@ export const USAGE_LIMITS = {
   },
   resend: { emailsPerMonth: 3_000, emailsPerDay: 100 },
   tavily: { searchesPerMonth: 1_000 }, // free plan: 1,000 credits/month, 1 credit per basic search
-  stopAtShare: 0.9, // skip the scan (Vercel), the email (Resend) or the web searches (Tavily) at 90% of a free quota
+  apify: {
+    // valig/linkedin-jobs-scraper, Apify free tier prices
+    usdPerResult: 0.0004,
+    usdPerStart: 0.001,
+    monthlyCreditUsd: 5, // the free plan's monthly credit; the LinkedIn scan is skipped near it
+  },
+  stopAtShare: 0.9, // skip the scan (Vercel), the email (Resend), the web searches (Tavily) or the LinkedIn scan (Apify) at 90% of a free quota
 };
 
 // EXAMPLE — replace with searches for your own roles. Web searches (Tavily) find jobs at your companies
@@ -69,3 +75,27 @@ export const WEB_SEARCHES: { query: string; domains?: string[] }[] = [
   { query: 'Israel "business operations" OR "sales operations"', domains: ["jobs.smartrecruiters.com"] },
   { query: '"customer success operations" OR "revenue operations" OR "GTM operations" jobs Israel Tel Aviv' },
 ];
+
+// LinkedIn scan (any company, not just the list). Each search runs as one Apify actor run, the way
+// you'd set it up on LinkedIn: loose keywords, no title filter; Jev reads every posting in full.
+//   location: as LinkedIn spells it    distanceKm: radius around that place    remote: remote jobs only
+// LinkedIn matches keywords loosely, so a handful of searches covers a lot; each extra one adds less.
+export const LINKEDIN_ACTOR = "valig/linkedin-jobs-scraper";
+export const LINKEDIN_LIMIT = 200; // results per search, per run
+// EXAMPLE — replace with your own saved LinkedIn searches.
+export const LINKEDIN_SEARCHES: { keywords: string; location: string; distanceKm?: number; remote?: boolean }[] = [
+  { keywords: "business operations", location: "Israel" },
+  { keywords: "customer success operations", location: "Israel" },
+  { keywords: "Head of Operations", location: "Tel Aviv District, Israel", remote: true },
+  { keywords: "revenue operations", location: "Tel Aviv-Yafo, Tel Aviv District, Israel", distanceKm: 40 },
+];
+
+// Recruitment agencies and job aggregators posting on LinkedIn (a starting list for Israel; add the ones you see).
+// Their jobs are dropped before Jev sees them.
+// Matched against the company name, case-insensitive: a name in the list, or one of the words in AGENCY_WORDS.
+export const AGENCIES = [
+  "JobsSeek", "Jobgether", "Gotfriends", "Ethosia", "Nisha", "Manpower", "Recruitx", "Expert Executive Recruiters",
+  "Talent Integration", "Confidential Careers", "Hire-Match", "ELAD HR", "Staffin", "Redline Group", "Arad Tech",
+  "CyWayz", "SQLink", "Yarden Abramovich", "Debbie Goldstein", "Adam Milo", "AllStars", "Hunter HR", "Experis",
+];
+export const AGENCY_WORDS = /\b(recruit\w*|staffing|headhunt\w*|hr consulting|executive search|placement)\b|השמה|גיוס/i;

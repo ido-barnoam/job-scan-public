@@ -6,12 +6,15 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
 
 function block(j: JobResult): string {
+  // Postings from the LinkedIn scan were read from LinkedIn's own data shortly after posting,
+  // so the "check it's still open" note is only for LinkedIn links found by web search.
+  const checkNote = isLinkedIn(j.url) && j.source !== "linkedin";
   const fit = j.fit === undefined ? "Not scored" : `Fit ${j.fit.toFixed(1)}/3 · confidence ${pct(j.fitConfidence)}`;
   return `<div style="margin-bottom:18px">
-  <div style="font-weight:bold;font-size:16px">${esc(j.company)} — Glassdoor ${j.rating}</div>
+  <div style="font-weight:bold;font-size:16px">${esc(j.company)}${j.rating ? ` — Glassdoor ${j.rating}` : ""}</div>
   <div>${esc(j.title)}</div>
   <div>${esc(j.location)}</div>
-  <div style="font-size:13px;color:#666">${fit}</div>${isLinkedIn(j.url) ? `
+  <div style="font-size:13px;color:#666">${fit}</div>${checkNote ? `
   <div style="font-size:13px;color:#8a5a00">Found on LinkedIn, which hides details from logged-out visitors. Check in a browser that it is still open.</div>` : ""}
   <div><a href="${esc(j.url)}">View and apply</a></div>
 </div>`;
@@ -24,8 +27,9 @@ export function buildEmail(r: RunReport, reportUrl: string) {
   const strong = r.jobs.filter((j) => j.tier === "strong").sort(byRating);
   const look = r.jobs.filter((j) => j.tier === "look").sort(byRating);
   const dd = r.date.slice(8, 10) + "/" + r.date.slice(5, 7);
-  const subject =
-    strong.length + look.length > 0 ? `Job scan — ${dd}` : `Job scan — nothing new ${dd}`;
+  const linkedin = r.kind === "linkedin";
+  const name = linkedin ? "LinkedIn, any company" : "Job scan";
+  const subject = strong.length + look.length > 0 ? `${name} — ${dd}` : `${name} — nothing new ${dd}`;
 
   const s = r.stats;
   const failed = r.boards.filter((b) => b.status === "failed" || b.status === "wrong_company");
@@ -39,17 +43,26 @@ export function buildEmail(r: RunReport, reportUrl: string) {
   if (strong.length) html += `<h2 style="font-size:18px">Strong fit (${strong.length})</h2>${strong.map(block).join("")}`;
   if (look.length) html += `<h2 style="font-size:18px">Worth a look (${look.length})</h2>${look.map(block).join("")}`;
   if (!strong.length && !look.length && !r.guard?.stopped) html += `<p>The scan ran and found no new jobs.</p>`;
+  const agencies = r.jobs.filter((j) => j.reason === "agency").length;
   html += `<hr style="border:none;border-top:1px solid #ddd">
 <div style="font-size:13px;color:#555">
-${s.boardsCovered} of ${s.boards} boards read · ${s.judged} jobs scored · ${s.dropped} filtered out · ${s.seen} already sent before
+${
+    linkedin
+      ? `${s.boardsCovered} of ${s.boards} LinkedIn searches ran · ${r.jobs.length} new postings · ${s.judged} scored after reading the full posting · ${s.dropped} filtered out (${agencies} from recruitment agencies) · ${s.seen} already sent before`
+      : `${s.boardsCovered} of ${s.boards} boards read · ${s.judged} jobs scored · ${s.dropped} filtered out · ${s.seen} already sent before`
+  }
 </div>`;
   if (failed.length)
-    html += `<div style="font-size:13px;color:#555">Boards not read: ${failed
+    html += `<div style="font-size:13px;color:#555">${linkedin ? "Searches that failed" : "Boards not read"}: ${failed
       .map((b) => `${esc(b.company)} (${b.status === "failed" ? "error" : "different company"})`)
       .join(", ")}</div>`;
   if (r.errors.length) html += `<div style="font-size:13px;color:#a00">${r.errors.length} errors, details in the report.</div>`;
   if (r.usage && r.monthUsage)
-    html += `<div style="font-size:13px;color:#555">Jev cost: this run $${r.usage.jev.usd.toFixed(4)} · this month $${r.monthUsage.jev.usd.toFixed(3)} of $${USAGE_LIMITS.jev.monthlyBudgetUsd} · Vercel, Resend and Tavily on free plans</div>`;
+    html += `<div style="font-size:13px;color:#555">Jev cost: this run $${r.usage.jev.usd.toFixed(4)} · this month $${r.monthUsage.jev.usd.toFixed(3)} of $${USAGE_LIMITS.jev.monthlyBudgetUsd}${
+      linkedin
+        ? ` · Apify (estimated): this run $${r.usage.apify.usd.toFixed(3)} · this month $${r.monthUsage.apify.usd.toFixed(2)} of the $${USAGE_LIMITS.apify.monthlyCreditUsd} free credit`
+        : " · Vercel, Resend and Tavily on free plans"
+    }</div>`;
   html += `<p><a href="${esc(reportUrl)}">Open the full report with every job, filter and score</a></p></div>`;
   return { subject, html };
 }

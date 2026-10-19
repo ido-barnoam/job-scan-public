@@ -1,4 +1,4 @@
-export type Ats = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "web";
+export type Ats = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "web" | "linkedin";
 
 export interface Board {
   company: string;
@@ -25,7 +25,7 @@ export type LocationClass = "israel" | "ambiguous" | "elsewhere";
 
 export type Tier = "strong" | "look" | "seen" | "dropped";
 
-export type DropReason = "low_fit" | "excluded" | "not_israel" | "wrong_company" | "not_judged" | "not_on_list" | "closed" | "unreadable";
+export type DropReason = "low_fit" | "excluded" | "not_israel" | "wrong_company" | "not_judged" | "not_on_list" | "closed" | "unreadable" | "agency";
 
 // One set of Jev answers about a job (title pass or full-posting pass).
 export interface Judgment {
@@ -56,7 +56,7 @@ export interface JobResult {
   verified?: boolean; // re-scored with the full job description
   cached?: boolean;
   // Decision trail, for the "how Jev decided" view.
-  source?: "board" | "web";
+  source?: "board" | "web" | "linkedin";
   titlePass?: Judgment;
   postingPass?: Judgment & { chars: number };
   boardMatch?: number;
@@ -74,6 +74,14 @@ export interface JobResult {
     collapsedJobs?: number; // careers page at a company not on the list, kept as one row
     pageTitle?: string; // the search result's own title, before Jev picked the job title
     titleProbs?: Record<string, number>; // Jev's choice among candidate job titles ("none" included)
+  };
+  linkedin?: {
+    searches: string[]; // which saved searches returned it
+    postedDate?: string;
+    experienceLevel?: string;
+    sector?: string;
+    applyType?: string; // EASY_APPLY or EXTERNAL
+    applicants?: string;
   };
   tier: Tier;
   reason?: DropReason;
@@ -109,10 +117,12 @@ export interface Usage {
   };
   resend: { emails: number };
   tavily: { searches: number };
+  apify: { runs: number; results: number; usd: number }; // usd is estimated from the actor's published prices
 }
 
 export interface RunReport {
-  id: string; // e.g. 2026-09-23T01-00-05Z
+  id: string; // e.g. 2026-09-23T01-00-05Z, or 2026-09-23T02-30-05Z-linkedin
+  kind?: "boards" | "linkedin"; // missing on runs saved before the LinkedIn scan existed: boards
   date: string; // YYYY-MM-DD in Israel time
   startedAt: string;
   finishedAt: string;

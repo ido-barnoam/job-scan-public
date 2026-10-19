@@ -1,6 +1,7 @@
 import { USAGE_LIMITS } from "../config/settings";
 import { spentUsd, usage as jevUsage } from "./jev";
 import { blobUsage } from "./store";
+import { apifyUsage } from "./linkedin";
 import { tavilyUsage } from "./web";
 import type { RunReport, Usage } from "./types";
 
@@ -11,12 +12,13 @@ export const emptyUsage = (): Usage => ({
   vercel: { runs: 0, durationSec: 0, activeCpuSec: 0, memoryGbHours: 0, blobAdvancedOps: 0, blobSimpleOps: 0, blobBytesRead: 0, blobBytesWritten: 0 },
   resend: { emails: 0 },
   tavily: { searches: 0 },
+  apify: { runs: 0, results: 0, usd: 0 },
 });
 
 export function addUsage(a: Usage, b: Usage): Usage {
   const out = emptyUsage();
-  // Older runs may lack a service (e.g. tavily), so read every field defensively.
-  for (const svc of ["jev", "vercel", "resend", "tavily"] as const)
+  // Older runs may lack a service (e.g. tavily, apify), so read every field defensively.
+  for (const svc of ["jev", "vercel", "resend", "tavily", "apify"] as const)
     for (const k of Object.keys(out[svc]))
       (out[svc] as any)[k] = ((a[svc] as any)?.[k] ?? 0) + ((b[svc] as any)?.[k] ?? 0);
   return out;
@@ -58,6 +60,7 @@ export function collectRunUsage(started: Date, cpuStart: NodeJS.CpuUsage, pendin
     },
     resend: { emails: 0 },
     tavily: { searches: tavilyUsage.searches },
+    apify: { ...apifyUsage },
   };
 }
 
@@ -75,6 +78,7 @@ export function shares(month: Usage, storedBytes: number) {
     blobTransfer: month.vercel.blobBytesRead / 1e9 / v.blobTransferGb,
     resendMonth: month.resend.emails / L.resend.emailsPerMonth,
     tavilyMonth: month.tavily.searches / L.tavily.searchesPerMonth,
+    apifyMonth: (month.apify?.usd ?? 0) / L.apify.monthlyCreditUsd,
   };
 }
 

@@ -136,6 +136,7 @@ export function fetchBoard(b: Board): Promise<RawJob[]> {
     case "smartrecruiters":
       return smartrecruiters(b);
     case "web":
-      return Promise.resolve([]); // web-search finds are not read from a board
+    case "linkedin":
+      return Promise.resolve([]); // web-search and LinkedIn finds are not read from a board
   }
 }

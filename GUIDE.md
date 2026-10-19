@@ -28,7 +28,10 @@ a private note for now. **Never paste keys into the chat with the AI.** You'll p
    This is the AI that judges which jobs fit you. It costs cents a month; add a payment method if asked.
 4. **Tavily** (app.tavily.com): sign up on the free plan and copy your API key (it starts with `tvly-`).
    This runs the web searches.
-5. **Resend** (resend.com), only if you want the daily email: sign up **with the email address you want
+5. **Apify** (console.apify.com), only if you want the LinkedIn scan: sign up on the free plan, open
+   **Settings → API & Integrations**, create a token named `job-scan` and copy it. This runs your
+   LinkedIn job searches. The free plan's $5 monthly credit covers it.
+6. **Resend** (resend.com), only if you want the daily email: sign up **with the email address you want
    the job emails sent to**, open **API Keys**, create a key and copy it.
 
 ## Step 2: Install Claude and open a folder
@@ -84,14 +87,18 @@ When you're happy, tell Claude to send the first real email and turn on the dail
 
 - **The email** arrives each morning, usually between 04:00 and 05:00 Israel time. "Strong fit" jobs match you well;
   "Worth a look" are less certain. Each job appears only once.
+- **The LinkedIn email** (if you set it up) arrives about two hours later, titled "LinkedIn, any company".
+  It covers your saved LinkedIn searches at any company, not only your list. The first one covers a whole
+  week, so it's longer. A job is never sent by both emails.
 - **The report** has everything the scan saw:
   - **Considered**: jobs that fit. **Dropped**: jobs that didn't, each with a reason.
   - **Role status**: mark jobs **CV sent** or **Not relevant** to keep track. It's saved automatically.
   - **Why?**: the full explanation for any job.
   - **Usage**: what each service used this month. You'll never be charged more than $5 a month by
     TypeSafe; the other services are on free plans.
-- **To change anything** (your roles, companies, the email), open Claude in the same folder and ask,
-  for example *"add Wix and Monday.com to my companies"*. Claude will update and redeploy the app.
+- **To change anything** (your roles, companies, the email, your LinkedIn searches), open Claude in the
+  same folder and ask, for example *"add Wix and Monday.com to my companies"* or *"add a LinkedIn search
+  for 'Head of Operations', remote only"*. Claude will update and redeploy the app.
 
 ## If something goes wrong
 
@@ -102,10 +109,12 @@ When you're happy, tell Claude to send the first real email and turn on the dail
 | The report link shows "404" | The link must include your exact report token. Ask Claude for the link again. |
 | The email says "Usage limit notice" | A monthly limit was reached. It resets next month. Ask Claude what happened. |
 | The jobs don't fit | Tell Claude what's wrong in plain words; it will change your profile and re-run. |
+| The LinkedIn email says a search failed | Ask Claude: *"A LinkedIn search failed, check the last LinkedIn run."* The other searches still ran. |
+| Too many recruitment agency jobs | Tell Claude the agency's name; it will add it to the agency list. |
 
 ## Keeping it safe
 
 - Keys only go into Vercel, never into chats, emails or documents.
 - Your report link is private. If it leaks, ask Claude to change your `REPORT_TOKEN`.
 - You can stop everything at any time: in Vercel, open the project → **Settings** → **Cron Jobs** and
-  disable the schedule.
+  disable the schedule. There are two schedules if you set up the LinkedIn scan.
